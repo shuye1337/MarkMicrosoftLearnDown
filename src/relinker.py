@@ -15,6 +15,7 @@ import shutil
 from urllib.parse import unquote
 
 import fitz  # pymupdf
+from tqdm import tqdm
 
 # 确保 stdout 能处理中文
 if hasattr(sys.stdout, "reconfigure"):
@@ -172,32 +173,36 @@ def relink_all(pdf_root=None, toc_map_path=None, url_prefix=DEFAULT_LINK_PREFIX,
     total_modified = 0
     total_matched_all = 0
     total_not_found = []
+    errors = []
 
-    for pdf_path in pdf_files:
-        rel = os.path.relpath(pdf_path, pdf_root)
-        try:
-            modified, matched, nf = replace_links_in_pdf(
-                pdf_path, mapping, pdf_root, link_pattern)
-            if matched > 0:
-                status = "M" if modified else "-"
-                print(f"[{status}] {rel}  ({matched} links, {len(nf)} not mapped)")
+    with tqdm(total=len(pdf_files), desc="重映射进度", unit="个") as pbar:
+        for pdf_path in pdf_files:
+            rel = os.path.relpath(pdf_path, pdf_root)
+            try:
+                modified, matched, nf = replace_links_in_pdf(
+                    pdf_path, mapping, pdf_root, link_pattern)
                 if modified:
                     total_modified += 1
                 total_matched_all += matched
                 total_not_found.extend(nf)
-            else:
-                print(f"[ ] {rel}")
-        except Exception as e:
-            print(f"[E] {rel}  Error: {e}")
+            except Exception as e:
+                errors.append(f"{rel}: {e}")
+            pbar.update(1)
 
     print()
     print(f"Modified: {total_modified} / {len(pdf_files)} PDFs")
     print(f"Total links found: {total_matched_all}")
+    
     if total_not_found:
         uniq = sorted(set(total_not_found))
         print(f"Unmapped slugs ({len(uniq)}):")
         for s in uniq:
             print(f"  - {s}")
+    
+    if errors:
+        print(f"\n⚠️  {len(errors)} 个错误:")
+        for err in errors:
+            print(f"  - {err}")
 
     return {
         "modified": total_modified,

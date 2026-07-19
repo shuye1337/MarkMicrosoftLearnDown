@@ -15,6 +15,7 @@ from collections import Counter
 from pathlib import Path
 
 import fitz  # pymupdf
+from tqdm import tqdm
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_PDF_ROOT = BASE_DIR / "PDF" / "divided"
@@ -36,7 +37,7 @@ H3_RATIO = 1.35
 X_TOLERANCE = 6.0
 Y_MERGE_GAP = 8.0
 FEEDBACK_KEYWORDS = ["反馈", "此页面是否有帮助", "获取帮助", "Microsoft Q&A",
-                     "Q&A", "本页内容"]
+                     "Q&A", "本页内容", "Feedback"]
 NOTE_KEYWORDS = ["备注", "注意", "重要", "警告", "提示", "Note:", "Warning:",
                  "Important:", "Tip:"]
 LEADIN_PATTERN = re.compile(r"(包括|如下|以下|下列)[：:]\s*$")
@@ -142,16 +143,24 @@ class Converter:
         else:
             pdfs = sorted(self.pdf_root.rglob("*.pdf"))
         print(f"找到 {len(pdfs)} 个 PDF 文件")
-        for i, p in enumerate(pdfs):
-            rel = p.relative_to(self.pdf_root)
-            try:
-                print(f"[{i+1}/{len(pdfs)}] {rel} ...", end=" ", flush=True)
-                self.convert(p)
-                self.stats["ok"] += 1
-                print("OK")
-            except Exception as e:
-                self.stats["err"] += 1
-                print(f"ERR: {e}")
+        
+        errors = []
+        with tqdm(total=len(pdfs), desc="转换进度", unit="个") as pbar:
+            for p in pdfs:
+                rel = p.relative_to(self.pdf_root)
+                try:
+                    self.convert(p)
+                    self.stats["ok"] += 1
+                except Exception as e:
+                    self.stats["err"] += 1
+                    errors.append(f"{rel}: {e}")
+                pbar.update(1)
+        
+        if errors:
+            print(f"\n⚠️  {len(errors)} 个错误:")
+            for err in errors:
+                print(f"  - {err}")
+        
         print(f"\n完成: 成功 {self.stats['ok']}, 错误 {self.stats['err']}")
 
     def convert(self, path: Path):

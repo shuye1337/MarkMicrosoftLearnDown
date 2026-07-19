@@ -14,6 +14,7 @@ import argparse
 import os
 import re
 import io
+from tqdm import tqdm
 from pypdf import PdfReader, PdfWriter
 from pypdf.errors import PdfReadError, PdfStreamError
 
@@ -192,65 +193,71 @@ def split_pdf_by_bookmarks(
         output_dir = DEFAULT_WORK_ROOT
     os.makedirs(output_dir, exist_ok=True)
 
-    # 4. 打印书签信息
+    # 4. 打印书签摘要
     print(f"📄 PDF: {pdf_path}")
     print(f"📑 总页数: {total_pages}")
-    print(f"🔖 找到 {len(bookmarks)} 个有效书签:\n")
-    for i, b in enumerate(bookmarks):
-        level = b["folder_path"].count(os.sep) + 1 if b["folder_path"] else 0
-        print(f"  {i+1:>3}. {'  ' * level}{b['title']}  →  第 {b['page']+1} 页  [{b['folder_path'] or '根目录'}]")
-    print()
+    print(f"🔖 找到 {len(bookmarks)} 个有效书签")
 
-    # 5. 逐个书签拆分
-    # 用于跟踪每个文件夹下已使用的文件名，防止重名覆盖
-    used_filenames = {} 
+    # 5. 逐个书签拆分（带进度条）
+    used_filenames = {}
     manifest = []
+    errors = []
 
-    for i, bm in enumerate(bookmarks):
-        start_page = bm["page"]
-        end_page = bookmarks[i + 1]["page"] if i + 1 < len(bookmarks) else total_pages
+    with tqdm(total=len(bookmarks), desc="拆分进度", unit="个") as pbar:
+        for i, bm in enumerate(bookmarks):
+            start_page = bm["page"]
+            end_page = bookmarks[i + 1]["page"] if i + 1 < len(bookmarks) else total_pages
 
-        if start_page >= end_page and i + 1 < len(bookmarks):
-            print(f"  ⏭  跳过 '{bm['title']}'（页码范围为空）")
-            continue
+            if start_page >= end_page and i + 1 < len(bookmarks):
+                errors.append(f"跳过 '{bm['title']}'（页码范围为空）")
+                pbar.update(1)
+                continue
 
-        writer = PdfWriter()
-        for p in range(start_page, end_page):
-            writer.add_page(reader.pages[p])
+            try:
+                writer = PdfWriter()
+                for p in range(start_page, end_page):
+                    writer.add_page(reader.pages[p])
 
-        # 构建输出路径
-        safe_title = sanitize_filename(bm["title"])
-        folder_path = os.path.join(output_dir, bm["folder_path"]) if bm["folder_path"] else output_dir
-        os.makedirs(folder_path, exist_ok=True)
+                safe_title = sanitize_filename(bm["title"])
+                folder_path = os.path.join(output_dir, bm["folder_path"]) if bm["folder_path"] else output_dir
+                os.makedirs(folder_path, exist_ok=True)
 
-        # 处理同名文件
-        base_filename = f"{safe_title}.pdf"
-        if folder_path not in used_filenames:
-            used_filenames[folder_path] = set()
+                base_filename = f"{safe_title}.pdf"
+                if folder_path not in used_filenames:
+                    used_filenames[folder_path] = set()
+                    
+                final_filename = base_filename
+                counter = 1
+                while final_filename in used_filenames[folder_path]:
+                    final_filename = f"{safe_title}_{counter}.pdf"
+                    counter += 1
+                used_filenames[folder_path].add(final_filename)
+
+                filepath = os.path.join(folder_path, final_filename)
+
+                with open(filepath, "wb") as f:
+                    writer.write(f)
+
+                page_count = end_page - start_page
+                rel_path = os.path.relpath(filepath, output_dir)
+
+                manifest.append({
+                    "title": bm["title"],
+                    "rel_path": rel_path.replace(os.sep, "/"),
+                    "start_page": start_page,
+                    "end_page": end_page,
+                    "page_count": page_count,
+                })
+            except Exception as e:
+                errors.append(f"处理 '{bm['title']}' 时出错: {e}")
             
-        final_filename = base_filename
-        counter = 1
-        while final_filename in used_filenames[folder_path]:
-            final_filename = f"{safe_title}_{counter}.pdf"
-            counter += 1
-        used_filenames[folder_path].add(final_filename)
+            pbar.update(1)
 
-        filepath = os.path.join(folder_path, final_filename)
-
-        with open(filepath, "wb") as f:
-            writer.write(f)
-
-        page_count = end_page - start_page
-        rel_path = os.path.relpath(filepath, output_dir)
-        print(f"  ✅ {rel_path}  (第 {start_page+1}-{end_page} 页, 共 {page_count} 页)")
-
-        manifest.append({
-            "title": bm["title"],
-            "rel_path": rel_path.replace(os.sep, "/"),
-            "start_page": start_page,
-            "end_page": end_page,
-            "page_count": page_count,
-        })
+    # 仅显示错误日志
+    if errors:
+        print(f"\n⚠️  {len(errors)} 个问题:")
+        for err in errors:
+            print(f"  - {err}")
 
     print(f"\n🎉 完成！共生成 {len(manifest)} 个文件，保存在: {output_dir}")
     return manifest
