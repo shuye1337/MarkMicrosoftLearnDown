@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-split_pdf_by_bookmarks.py
+splitter.py
 按 PDF 书签（大纲/Outlines）将 PDF 拆分为多个文件，并按书签层级自动创建文件夹。
 
 用法:
-    python pdf.py input.pdf [-o output_dir] [--level 1]
+    python splitter.py input.pdf [-o output_dir] [--level 1]
 
 依赖:
     pip install pypdf
@@ -16,6 +16,10 @@ import re
 import io
 from pypdf import PdfReader, PdfWriter
 from pypdf.errors import PdfReadError, PdfStreamError
+
+# 统一工作根目录：拆分产物默认输出到 PDF/divided/，供 relink 与 toMD 复用
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DEFAULT_WORK_ROOT = os.path.join(BASE_DIR, "PDF", "divided")
 
 
 # ──────────────────────────────────────────────
@@ -129,6 +133,13 @@ def split_pdf_by_bookmarks(
     output_dir: str = None,
     max_level: int = None, # 保留参数，但在新逻辑中可能需要调整
 ):
+    """按书签拆分 PDF。
+
+    返回拆分清单 list[dict]，每项包含：
+        {"title", "rel_path", "start_page", "end_page", "page_count"}
+    rel_path 为相对 output_dir 的 PDF 文件路径（以 / 分隔）。
+    出错时返回空列表。
+    """
     reader = None
     
     # 1. 尝试正常读取
@@ -145,16 +156,16 @@ def split_pdf_by_bookmarks(
                 print("✅ 自动清理并读取成功！")
             except Exception as e2:
                 print(f"❌ 自动清理后依然无法读取: {e2}")
-                return
+                return []
         else:
             print("❌ 找不到 %%EOF 标记，文件可能已严重损坏。")
-            return
+            return []
 
     total_pages = len(reader.pages)
 
     if not reader.outline:
         print("❌ 该 PDF 没有书签（大纲），无法按书签分割。")
-        return
+        return []
 
     # 2. 提取所有书签
     bookmarks = extract_bookmarks(reader.outline, reader)
@@ -164,7 +175,7 @@ def split_pdf_by_bookmarks(
 
     if not bookmarks:
         print("❌ 过滤后没有符合条件的书签。")
-        return
+        return []
 
     # 按页码排序并去重
     bookmarks.sort(key=lambda b: b["page"])
@@ -176,10 +187,9 @@ def split_pdf_by_bookmarks(
             unique_bookmarks.append(b)
     bookmarks = unique_bookmarks
 
-    # 3. 准备输出目录
+    # 3. 准备输出目录（默认统一为 PDF/divided/）
     if output_dir is None:
-        base = os.path.splitext(os.path.basename(pdf_path))[0]
-        output_dir = os.path.join(os.path.dirname(pdf_path) or '.', f"{base}_split")
+        output_dir = DEFAULT_WORK_ROOT
     os.makedirs(output_dir, exist_ok=True)
 
     # 4. 打印书签信息
@@ -194,6 +204,7 @@ def split_pdf_by_bookmarks(
     # 5. 逐个书签拆分
     # 用于跟踪每个文件夹下已使用的文件名，防止重名覆盖
     used_filenames = {} 
+    manifest = []
 
     for i, bm in enumerate(bookmarks):
         start_page = bm["page"]
@@ -233,7 +244,16 @@ def split_pdf_by_bookmarks(
         rel_path = os.path.relpath(filepath, output_dir)
         print(f"  ✅ {rel_path}  (第 {start_page+1}-{end_page} 页, 共 {page_count} 页)")
 
-    print(f"\n🎉 完成！共生成 {len(bookmarks)} 个文件，保存在: {output_dir}")
+        manifest.append({
+            "title": bm["title"],
+            "rel_path": rel_path.replace(os.sep, "/"),
+            "start_page": start_page,
+            "end_page": end_page,
+            "page_count": page_count,
+        })
+
+    print(f"\n🎉 完成！共生成 {len(manifest)} 个文件，保存在: {output_dir}")
+    return manifest
 
 
 # ──────────────────────────────────────────────

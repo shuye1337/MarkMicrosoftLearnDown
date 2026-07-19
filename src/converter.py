@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-toMD.py - 将 PDF/divided 下的所有 PDF 转换为 Markdown 格式。
+converter.py - 将 PDF/divided 下的所有 PDF 转换为 Markdown 格式。
 
 - MD 输出到 MD/ 目录（镜像目录结构）
 - 图片提取到 PIC/ 目录（镜像目录结构）
@@ -17,9 +17,9 @@ from pathlib import Path
 import fitz  # pymupdf
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-PDF_ROOT = BASE_DIR / "PDF" / "divided"
-MD_ROOT = BASE_DIR / "MD"
-PIC_ROOT = BASE_DIR / "PIC"
+DEFAULT_PDF_ROOT = BASE_DIR / "PDF" / "divided"
+DEFAULT_MD_ROOT = BASE_DIR / "MD"
+DEFAULT_PIC_ROOT = BASE_DIR / "PIC"
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
@@ -119,14 +119,31 @@ class Block:
 # ── 主转换器 ───────────────────────────────────────────────────
 
 class Converter:
-    def __init__(self):
+    def __init__(self, pdf_root=None, md_root=None, pic_root=None):
+        self.pdf_root = Path(pdf_root) if pdf_root else DEFAULT_PDF_ROOT
+        self.md_root = Path(md_root) if md_root else DEFAULT_MD_ROOT
+        self.pic_root = Path(pic_root) if pic_root else DEFAULT_PIC_ROOT
         self.stats = {"ok": 0, "err": 0}
 
-    def run(self):
-        pdfs = sorted(PDF_ROOT.rglob("*.pdf"))
+    def run(self, restrict_to=None):
+        """转换 pdf_root 下的 PDF。
+
+        restrict_to 为章节相对路径集合（以 / 分隔，相对 pdf_root）时，
+        仅转换这些 PDF，实现增量更新。
+        """
+        if restrict_to is not None:
+            pdfs = []
+            for rel in sorted(restrict_to):
+                p = self.pdf_root / rel
+                if p.is_file():
+                    pdfs.append(p)
+                else:
+                    print(f"[跳过] 未找到章节文件：{rel}")
+        else:
+            pdfs = sorted(self.pdf_root.rglob("*.pdf"))
         print(f"找到 {len(pdfs)} 个 PDF 文件")
         for i, p in enumerate(pdfs):
-            rel = p.relative_to(PDF_ROOT)
+            rel = p.relative_to(self.pdf_root)
             try:
                 print(f"[{i+1}/{len(pdfs)}] {rel} ...", end=" ", flush=True)
                 self.convert(p)
@@ -147,8 +164,8 @@ class Converter:
             margin = self._margin(blocks)
             self._classify(blocks, body_size, margin)
             md = self._render(blocks, images, path)
-            rel = path.relative_to(PDF_ROOT)
-            out = MD_ROOT / rel.with_suffix(".md")
+            rel = path.relative_to(self.pdf_root)
+            out = self.md_root / rel.with_suffix(".md")
             out.parent.mkdir(parents=True, exist_ok=True)
             out.write_text("\n".join(md) + "\n", encoding="utf-8")
         finally:
@@ -160,7 +177,7 @@ class Converter:
                  ) -> tuple[list[Block], dict[int, list[str]]]:
         blocks: list[Block] = []
         images: dict[int, list[str]] = {}
-        rel = path.relative_to(PDF_ROOT)
+        rel = path.relative_to(self.pdf_root)
 
         for pn in range(doc.page_count):
             page = doc[pn]
@@ -179,7 +196,7 @@ class Converter:
             # 图片
             imgs = doc.get_page_images(pn)
             if imgs:
-                sub = PIC_ROOT / rel.parent / rel.stem
+                sub = self.pic_root / rel.parent / rel.stem
                 sub.mkdir(parents=True, exist_ok=True)
                 page_imgs: list[str] = []
                 for idx, info in enumerate(imgs):
@@ -339,7 +356,7 @@ class Converter:
         for b in merged:
             pages.setdefault(b.page, []).append(b)
 
-        rel = path.relative_to(PDF_ROOT)
+        rel = path.relative_to(self.pdf_root)
 
         for pn in sorted(pages):
             # 页面图片放在页面正文之前（紧随页面顶部标题之后）
@@ -538,9 +555,9 @@ class Converter:
 def main():
     print("=" * 60)
     print("PDF -> Markdown 转换")
-    print(f"源: {PDF_ROOT}")
-    print(f"输出: {MD_ROOT}")
-    print(f"图片: {PIC_ROOT}")
+    print(f"源: {DEFAULT_PDF_ROOT}")
+    print(f"输出: {DEFAULT_MD_ROOT}")
+    print(f"图片: {DEFAULT_PIC_ROOT}")
     print("=" * 60)
     Converter().run()
 
