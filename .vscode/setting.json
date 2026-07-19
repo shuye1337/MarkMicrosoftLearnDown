@@ -1,0 +1,7 @@
+{
+  "markdown.preview.relativeFilesToRoot": true,
+  "markdown.preview.relativeFilesToFile": true,
+  "markdown.preview.frontMatter": "none",
+  "markdown.preview.scrollPreviewWithEditor": true,
+  "markdown.preview.scrollEditorWithPreview": true
+}
