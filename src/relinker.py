@@ -3,8 +3,8 @@
 relinker.py - 将 PDF 内对其他章节的超链接替换为本地路径。
 
 默认替换 https://learn.microsoft.com/zh-cn/windows/win32/Direct2D/<slug>
-形式的链接，使用 toc.json 的 href->toc_title 映射得到目录结构。
-URL 前缀、toc.json 路径、PDF 根目录均可由调用方指定。
+形式的链接，使用目录映射 JSON 的 href->toc_title 映射得到目录结构。
+URL 前缀、目录映射 JSON 路径、PDF 根目录均可由调用方指定。
 """
 
 import json
@@ -21,15 +21,15 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DEFAULT_TOC_PATH = os.path.join(BASE_DIR, "toc.json")
+DEFAULT_TOC_MAP_PATH = os.path.join(BASE_DIR, "toc.json")
 DEFAULT_PDF_ROOT = os.path.join(BASE_DIR, "PDF", "divided")
 DEFAULT_BACKUP_DIR = os.path.join(BASE_DIR, "PDF", "backup")
 
 DEFAULT_LINK_PREFIX = "https://learn.microsoft.com/zh-cn/windows/win32/Direct2D/"
 
 
-def flatten_toc(data):
-    """递归遍历 toc.json，返回 {href: local_rel_path_without_ext} 字典。"""
+def flatten_toc_map(data):
+    """递归遍历目录映射 JSON，返回 {href: local_rel_path_without_ext} 字典。"""
     mapping = {}
 
     def walk(node, parent_path=""):
@@ -132,36 +132,36 @@ def _iter_pdf_files(pdf_root, restrict_to=None):
                 yield os.path.join(root, f)
 
 
-def relink_all(pdf_root=None, toc_path=None, url_prefix=DEFAULT_LINK_PREFIX,
+def relink_all(pdf_root=None, toc_map_path=None, url_prefix=DEFAULT_LINK_PREFIX,
                restrict_to=None):
     """对 pdf_root 下的 PDF 执行超链接重映射。
 
     参数:
         pdf_root:    PDF 根目录，默认 PDF/divided。
-        toc_path:    toc.json 路径，默认项目根 toc.json。
+        toc_map_path:    目录映射 JSON 路径，默认项目根 toc.json。
         url_prefix:  待替换的 URL 前缀（决定匹配规则）。
         restrict_to: 可选章节相对路径集合，仅处理这些章节（增量更新）。
 
     返回统计字典 {modified, total, matched, not_found}。
     """
     pdf_root = pdf_root or DEFAULT_PDF_ROOT
-    toc_path = toc_path or DEFAULT_TOC_PATH
+    toc_map_path = toc_map_path or DEFAULT_TOC_MAP_PATH
 
     print("=" * 60)
     print("PDF 超链接重映射工具")
     print("=" * 60)
 
-    if not os.path.isfile(toc_path):
-        print(f"Error: {toc_path} not found")
+    if not os.path.isfile(toc_map_path):
+        print(f"Error: {toc_map_path} not found")
         return {"modified": 0, "total": 0, "matched": 0, "not_found": []}
 
     link_pattern = re.compile(r"^" + re.escape(url_prefix) + r"(.+)")
 
-    print(f"Loading {os.path.basename(toc_path)} ...")
-    with open(toc_path, "rb") as f:
+    print(f"Loading {os.path.basename(toc_map_path)} ...")
+    with open(toc_map_path, "rb") as f:
         data = json.load(f)
 
-    mapping = flatten_toc(data)
+    mapping = flatten_toc_map(data)
     print(f"Mapping built: {len(mapping)} entries")
     print(f"URL prefix: {url_prefix}")
 
@@ -212,12 +212,12 @@ def main():
 
     parser = argparse.ArgumentParser(description="PDF 超链接重映射工具")
     parser.add_argument("--pdf-root", default=None, help="PDF 根目录（默认 PDF/divided）")
-    parser.add_argument("--toc", default=None, help="toc.json 路径（默认项目根 toc.json）")
+    parser.add_argument("--toc-map", default=None, help="目录映射 JSON 路径（默认项目根 toc.json）")
     parser.add_argument("--url-prefix", default=DEFAULT_LINK_PREFIX,
                         help="待替换的 URL 前缀")
     args = parser.parse_args()
 
-    relink_all(pdf_root=args.pdf_root, toc_path=args.toc, url_prefix=args.url_prefix)
+    relink_all(pdf_root=args.pdf_root, toc_map_path=args.toc_map, url_prefix=args.url_prefix)
 
 
 if __name__ == "__main__":

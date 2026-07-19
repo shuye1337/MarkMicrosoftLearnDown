@@ -7,7 +7,7 @@
 ## 功能特性
 
 - **按书签拆分**：依据 PDF 大纲（Outline）递归拆分，自动按书签层级创建目录结构；内置对损坏 PDF 尾部数据的自动清理。
-- **超链接重映射**：借助 `toc.json` 的 `href → toc_title` 映射，把文档内的官方站点链接替换为拆分后本地 PDF 的相对路径。
+- **超链接重映射**：借助目录映射 JSON 的 `href → toc_title` 映射，把文档内的官方站点链接替换为拆分后本地 PDF 的相对路径。
 - **PDF → Markdown**：基于字号 / 字体 / 位置启发式识别标题、正文、列表、代码块与内联样式（粗体 / 斜体 / 等宽），提取页面图片到 `PIC/`，并剔除页面反馈区等噪声。
 - **增量更新**：为已处理章节记录文本哈希基线（`.manifest.json`），对比新 PDF 得出新增 / 修改 / 删除章节，仅对变化章节执行重映射与转换。
 - **产物统计**：按文件大小、单文件页数、书签页数间隔等维度对拆分产物做统计诊断。
@@ -40,7 +40,7 @@ direct_2D_docs/
 │   ├── converter.py     # PDF → Markdown 转换
 │   ├── differ.py        # 章节差异检测与基线管理
 │   └── stats.py         # 拆分产物统计
-├── toc.json             # 官方文档目录树（href → 标题映射来源）
+├── toc.json             # 官方文档目录映射 JSON（href → 标题映射来源）
 ├── PDF/
 │   ├── divided/         # 拆分产物（工作根目录，含 .manifest.json 基线）
 │   ├── backup/          # 重映射前的 PDF 备份
@@ -71,7 +71,7 @@ python src/main.py
 # 按书签拆分 PDF
 python src/splitter.py input.pdf -o PDF/divided
 
-# 超链接重映射（默认读取项目根 toc.json，处理 PDF/divided）
+# 超链接重映射（默认读取项目根目录映射 JSON，处理 PDF/divided）
 python src/relinker.py --toc toc.json --url-prefix "https://learn.microsoft.com/zh-cn/windows/win32/Direct2D/"
 
 # PDF → Markdown（PDF/divided → MD/，图片 → PIC/）
@@ -109,4 +109,4 @@ MD/…（Markdown 文档集）
 
 - 转换基于启发式规则，复杂版面（多列、表格、混排代码）可能需要人工校订。
 - 超链接重映射会以增量方式写回原 PDF，执行前会将原文件备份到 `PDF/backup/`。
-- `toc.json` 为链接重映射的映射来源，来自官方文档目录树，其 `href` 需与拆分产物的目录 / 文件名一致才能命中。
+- 目录映射 JSON 为链接重映射的映射来源，来自官方文档目录树，其 `href` 需与拆分产物的目录 / 文件名一致才能命中。

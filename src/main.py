@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from splitter import split_pdf_by_bookmarks, DEFAULT_WORK_ROOT  # noqa: E402
 from stats import find_largest_files, max_single_file_pages  # noqa: E402
-from relinker import relink_all, DEFAULT_TOC_PATH, DEFAULT_LINK_PREFIX  # noqa: E402
+from relinker import relink_all, DEFAULT_TOC_MAP_PATH, DEFAULT_LINK_PREFIX  # noqa: E402
 from converter import Converter, DEFAULT_MD_ROOT, DEFAULT_PIC_ROOT  # noqa: E402
 from differ import build_manifest, diff_new_pdf, manifest_path  # noqa: E402
 
@@ -73,10 +73,10 @@ def _relink_and_convert(restrict_to=None):
     """执行超链接重映射与 Markdown 转换（可限定章节集合）。"""
     # 超链接重映射
     print("\n── 步骤：超链接重映射 ──")
-    toc_path = ask("toc.json 路径", default=DEFAULT_TOC_PATH)
+    toc_map_path = ask("目录映射 JSON 路径", default=DEFAULT_TOC_MAP_PATH)
     url_prefix = ask("待替换的 URL 前缀", default=DEFAULT_LINK_PREFIX)
     if ask_yes_no("即将写回 PDF 文件，是否继续？", default=True):
-        relink_all(pdf_root=WORK_ROOT, toc_path=toc_path,
+        relink_all(pdf_root=WORK_ROOT, toc_map_path=toc_map_path,
                    url_prefix=url_prefix, restrict_to=restrict_to)
     else:
         print("  已跳过超链接重映射。")
