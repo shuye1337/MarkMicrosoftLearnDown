@@ -1,6 +1,6 @@
-# direct_2D_docs
+# MarkMicrosoftLearnDown
 
-将 Microsoft Direct2D 官方文档的 PDF 转换为结构化、可离线阅读的 Markdown 文档集的工具链。
+将 Microsoft 官方文档的 PDF 转换为结构化、可离线阅读的 Markdown 文档集的工具链。
 
 工具会按 PDF 书签把整份文档拆分为一份份章节文件，把文档内指向 learn.microsoft.com 的超链接重映射为本地相对路径，再逐章转换为 Markdown（同时提取图片），并支持在文档更新后**仅重新处理发生变化的章节**。
 
@@ -32,7 +32,7 @@ pip install pymupdf pypdf
 ## 目录结构
 
 ```
-direct_2D_docs/
+mark_ms_learn_down/
 ├── src/                 # 源码
 │   ├── main.py          # 交互式向导入口（串联全流程 / 增量更新）
 │   ├── splitter.py      # 按书签拆分 PDF
